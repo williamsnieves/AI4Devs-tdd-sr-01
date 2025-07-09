@@ -207,3 +207,101 @@ frontend/src/tests/
 ---
 
 **Now, please analyze the codebase and provide your comprehensive testing strategy following this chain of thought process.**
+
+## Second prompt
+
+# Test Refactoring: Parametrize with Jest .each() for Cleaner Tests
+
+## Context
+You are a senior software engineer specializing in test optimization and clean code practices. I have a comprehensive test suite for a candidate management system with both backend and frontend tests that are currently working perfectly (75 passing tests across 8 test suites).
+
+## Current Test Implementation
+- **Backend**: Jest tests for domain models (Candidate) and application services (candidateService) with Prisma mocking
+- **Frontend**: React Testing Library tests for components (AddCandidateForm, FileUploader, RecruiterDashboard) and services with axios mocking
+- **Test Types**: Pure unit tests with comprehensive mocking strategies
+
+## Objective
+Refactor the existing tests to use Jest's `.each()` parametrization to:
+1. **Reduce code duplication** in similar test scenarios
+2. **Improve readability** and maintainability
+3. **Make test intent clearer** through data-driven testing
+4. **Maintain 100% test coverage** and functionality
+
+## What to Parametrize
+Look for these patterns that are good candidates for `.each()`:
+- **Multiple input validation scenarios** (valid/invalid data combinations)
+- **Different file types** testing (PDF, DOCX, etc.)
+- **Various error responses** (400, 500, network errors)
+- **Edge cases** with similar logic but different data
+- **Form field validations** with different invalid inputs
+- **Component rendering** with different props/states
+
+## Requirements
+
+### 1. Identify Repetitive Test Patterns
+- Analyze test files for similar test structures with only data differences
+- Focus on tests that follow the same Arrange-Act-Assert pattern with different inputs
+
+### 2. Apply Parametrization Strategy
+Use Jest's `test.each()` or `describe.each()` with these formats:
+```javascript
+// Array of arrays format
+test.each([
+  [input1, expected1, description1],
+  [input2, expected2, description2],
+])('should %s when %s', (input, expected, description) => {
+  // test implementation
+});
+
+// Array of objects format (more readable)
+test.each([
+  { input: 'value1', expected: 'result1', description: 'case 1' },
+  { input: 'value2', expected: 'result2', description: 'case 2' },
+])('should $description', ({ input, expected }) => {
+  // test implementation
+});
+```
+
+### 3. Maintain Test Quality
+- **Keep descriptive test names** that clearly indicate what's being tested
+- **Preserve all assertions** and test logic
+- **Maintain proper mocking** for external dependencies
+- **Ensure test isolation** between parametrized cases
+
+### 4. Focus Areas for Refactoring
+
+#### Backend Tests Priority:
+- Candidate validation scenarios (required fields, format validation)
+- candidateService error handling (different HTTP status codes)
+- Edge cases for create/update operations
+
+#### Frontend Tests Priority:
+- Form validation with different invalid inputs
+- File upload scenarios (different file types, sizes, errors)
+- Component rendering with various props combinations
+- Service error handling scenarios
+
+## Instructions
+
+1. **Analyze each test file** to identify repetitive patterns
+2. **Group similar tests** that can share the same test logic
+3. **Create parametrized versions** using appropriate .each() format
+4. **Maintain test clarity** - if parametrization makes tests harder to understand, keep them separate
+5. **Test the refactored code** to ensure all 75 tests still pass
+6. **Provide before/after examples** showing the improvement
+
+## Success Criteria
+- ✅ Reduced lines of code in test files
+- ✅ Improved test readability and maintainability
+- ✅ All existing tests still pass (75/75)
+- ✅ Test intent remains clear and descriptive
+- ✅ No loss of test coverage or assertion quality
+
+## Output Format
+For each refactored test file, provide:
+1. **File name and location**
+2. **Before/after code comparison**
+3. **Explanation of the refactoring benefits**
+4. **Number of tests reduced/consolidated**
+
+Focus on practical improvements that make the test suite more maintainable while preserving all testing functionality.
