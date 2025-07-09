@@ -55,43 +55,52 @@ describe('Candidate Domain Model Unit Tests', () => {
       expect(candidate.resumes).toEqual([{ filePath: '/uploads/resume.pdf' }]);
     });
 
-    it('should create a candidate with default empty arrays', () => {
-      // Arrange
-      const candidateData = {
-        firstName: 'Juan',
-        lastName: 'Pérez',
-        email: 'juan.perez@example.com',
-      };
+    // Parametrized test for constructor with different data combinations
+    test.each([
+      {
+        description: 'create candidate with default empty arrays',
+        input: {
+          firstName: 'Juan',
+          lastName: 'Pérez',
+          email: 'juan.perez@example.com',
+        },
+        expectedArrays: { education: [], workExperience: [], resumes: [] },
+      },
+      {
+        description: 'handle undefined optional fields',
+        input: {
+          firstName: 'Juan',
+          lastName: 'Pérez',
+          email: 'juan.perez@example.com',
+          phone: undefined,
+          address: undefined,
+        },
+        expectedUndefined: ['phone', 'address'],
+      },
+    ])(
+      'should $description',
+      ({ input, expectedArrays, expectedUndefined }) => {
+        // Act
+        const candidate = new Candidate(input);
 
-      // Act
-      const candidate = new Candidate(candidateData);
+        // Assert
+        expect(candidate.firstName).toBe(input.firstName);
+        expect(candidate.lastName).toBe(input.lastName);
+        expect(candidate.email).toBe(input.email);
 
-      // Assert
-      expect(candidate.firstName).toBe('Juan');
-      expect(candidate.lastName).toBe('Pérez');
-      expect(candidate.email).toBe('juan.perez@example.com');
-      expect(candidate.education).toEqual([]);
-      expect(candidate.workExperience).toEqual([]);
-      expect(candidate.resumes).toEqual([]);
-    });
+        if (expectedArrays) {
+          Object.entries(expectedArrays).forEach(([key, value]) => {
+            expect(candidate[key as keyof typeof candidate]).toEqual(value);
+          });
+        }
 
-    it('should handle undefined optional fields', () => {
-      // Arrange
-      const candidateData = {
-        firstName: 'Juan',
-        lastName: 'Pérez',
-        email: 'juan.perez@example.com',
-        phone: undefined,
-        address: undefined,
-      };
-
-      // Act
-      const candidate = new Candidate(candidateData);
-
-      // Assert
-      expect(candidate.phone).toBeUndefined();
-      expect(candidate.address).toBeUndefined();
-    });
+        if (expectedUndefined) {
+          expectedUndefined.forEach((field) => {
+            expect(candidate[field as keyof typeof candidate]).toBeUndefined();
+          });
+        }
+      },
+    );
   });
 
   describe('save method', () => {
@@ -127,41 +136,41 @@ describe('Candidate Domain Model Unit Tests', () => {
         expect(result).toEqual(mockCreatedCandidate);
       });
 
-      it('should handle database initialization error on create', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-        });
+      // Parametrized test for create error scenarios
+      test.each([
+        {
+          description: 'handle database initialization error on create',
+          error: new mockPrismaClientInitializationError('Connection failed'),
+          expectedErrorMessage: 'Connection failed',
+          operation: 'create',
+        },
+        {
+          description: 'handle other database errors on create',
+          error: new Error('Database connection failed'),
+          expectedErrorMessage: 'Database connection failed',
+          operation: 'create',
+        },
+      ])(
+        'should $description',
+        async ({ error, expectedErrorMessage, operation }) => {
+          // Arrange
+          const candidate = new Candidate({
+            firstName: 'Juan',
+            lastName: 'Pérez',
+            email: 'juan.perez@example.com',
+          });
 
-        const initError = new mockPrismaClientInitializationError(
-          'Connection failed',
-        );
-        mockPrismaClient.candidate.create.mockRejectedValue(initError);
+          mockPrismaClient.candidate[operation as 'create'].mockRejectedValue(
+            error,
+          );
 
-        // Act & Assert
-        await expect(candidate.save()).rejects.toThrow('Connection failed');
-        expect(mockPrismaClient.candidate.create).toHaveBeenCalled();
-      });
-
-      it('should handle other database errors on create', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-        });
-
-        const dbError = new Error('Database connection failed');
-        mockPrismaClient.candidate.create.mockRejectedValue(dbError);
-
-        // Act & Assert
-        await expect(candidate.save()).rejects.toThrow(
-          'Database connection failed',
-        );
-        expect(mockPrismaClient.candidate.create).toHaveBeenCalled();
-      });
+          // Act & Assert
+          await expect(candidate.save()).rejects.toThrow(expectedErrorMessage);
+          expect(
+            mockPrismaClient.candidate[operation as 'create'],
+          ).toHaveBeenCalled();
+        },
+      );
     });
 
     describe('Updating existing candidate', () => {
@@ -198,128 +207,110 @@ describe('Candidate Domain Model Unit Tests', () => {
         expect(result).toEqual(mockUpdatedCandidate);
       });
 
-      it('should handle database initialization error on update', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          id: 1,
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-        });
+      // Parametrized test for update error scenarios
+      test.each([
+        {
+          description: 'handle database initialization error on update',
+          candidateId: 1,
+          error: new mockPrismaClientInitializationError('Connection failed'),
+          expectedErrorMessage: 'Connection failed',
+        },
+        {
+          description: 'handle record not found error on update',
+          candidateId: 999,
+          error: { code: 'P2025' },
+          expectedErrorMessage:
+            'No se pudo encontrar el registro del candidato con el ID proporcionado.',
+        },
+        {
+          description: 'handle other database errors on update',
+          candidateId: 1,
+          error: new Error('Database connection failed'),
+          expectedErrorMessage: 'Database connection failed',
+        },
+      ])(
+        'should $description',
+        async ({ candidateId, error, expectedErrorMessage }) => {
+          // Arrange
+          const candidate = new Candidate({
+            id: candidateId,
+            firstName: 'Juan',
+            lastName: 'Pérez',
+            email: 'juan.perez@example.com',
+          });
 
-        const initError = new mockPrismaClientInitializationError(
-          'Connection failed',
-        );
-        mockPrismaClient.candidate.update.mockRejectedValue(initError);
+          mockPrismaClient.candidate.update.mockRejectedValue(error);
 
-        // Act & Assert
-        await expect(candidate.save()).rejects.toThrow('Connection failed');
-        expect(mockPrismaClient.candidate.update).toHaveBeenCalled();
-      });
-
-      it('should handle record not found error on update', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          id: 999,
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-        });
-
-        const notFoundError = { code: 'P2025' };
-        mockPrismaClient.candidate.update.mockRejectedValue(notFoundError);
-
-        // Act & Assert
-        await expect(candidate.save()).rejects.toThrow(
-          'No se pudo encontrar el registro del candidato con el ID proporcionado.',
-        );
-        expect(mockPrismaClient.candidate.update).toHaveBeenCalled();
-      });
-
-      it('should handle other database errors on update', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          id: 1,
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-        });
-
-        const dbError = new Error('Database connection failed');
-        mockPrismaClient.candidate.update.mockRejectedValue(dbError);
-
-        // Act & Assert
-        await expect(candidate.save()).rejects.toThrow(
-          'Database connection failed',
-        );
-        expect(mockPrismaClient.candidate.update).toHaveBeenCalled();
-      });
+          // Act & Assert
+          await expect(candidate.save()).rejects.toThrow(expectedErrorMessage);
+          expect(mockPrismaClient.candidate.update).toHaveBeenCalled();
+        },
+      );
     });
 
     describe('Data formatting', () => {
-      it('should exclude undefined fields from candidateData', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-          phone: undefined,
-          address: undefined,
-        });
-
-        const mockCreatedCandidate = createMockCandidate();
-        mockPrismaClient.candidate.create.mockResolvedValue(
-          mockCreatedCandidate,
-        );
-
-        // Act
-        await candidate.save();
-
-        // Assert
-        expect(mockPrismaClient.candidate.create).toHaveBeenCalledWith({
-          data: {
+      // Parametrized test for data formatting scenarios
+      test.each([
+        {
+          description: 'exclude undefined fields from candidateData',
+          candidateData: {
+            firstName: 'Juan',
+            lastName: 'Pérez',
+            email: 'juan.perez@example.com',
+            phone: undefined,
+            address: undefined,
+          },
+          expectedData: {
             firstName: 'Juan',
             lastName: 'Pérez',
             email: 'juan.perez@example.com',
           },
-        });
-        expect(
-          mockPrismaClient.candidate.create.mock.calls[0][0].data,
-        ).not.toHaveProperty('phone');
-        expect(
-          mockPrismaClient.candidate.create.mock.calls[0][0].data,
-        ).not.toHaveProperty('address');
-      });
-
-      it('should include defined fields in candidateData', async () => {
-        // Arrange
-        const candidate = new Candidate({
-          firstName: 'Juan',
-          lastName: 'Pérez',
-          email: 'juan.perez@example.com',
-          phone: '612345678',
-          address: 'Calle Ejemplo 123',
-        });
-
-        const mockCreatedCandidate = createMockCandidate();
-        mockPrismaClient.candidate.create.mockResolvedValue(
-          mockCreatedCandidate,
-        );
-
-        // Act
-        await candidate.save();
-
-        // Assert
-        expect(mockPrismaClient.candidate.create).toHaveBeenCalledWith({
-          data: {
+          excludedFields: ['phone', 'address'],
+        },
+        {
+          description: 'include defined fields in candidateData',
+          candidateData: {
             firstName: 'Juan',
             lastName: 'Pérez',
             email: 'juan.perez@example.com',
             phone: '612345678',
             address: 'Calle Ejemplo 123',
           },
-        });
-      });
+          expectedData: {
+            firstName: 'Juan',
+            lastName: 'Pérez',
+            email: 'juan.perez@example.com',
+            phone: '612345678',
+            address: 'Calle Ejemplo 123',
+          },
+          excludedFields: [],
+        },
+      ])(
+        'should $description',
+        async ({ candidateData, expectedData, excludedFields }) => {
+          // Arrange
+          const candidate = new Candidate(candidateData);
+          const mockCreatedCandidate = createMockCandidate();
+          mockPrismaClient.candidate.create.mockResolvedValue(
+            mockCreatedCandidate,
+          );
+
+          // Act
+          await candidate.save();
+
+          // Assert
+          expect(mockPrismaClient.candidate.create).toHaveBeenCalledWith({
+            data: expectedData,
+          });
+
+          // Verify excluded fields are not present
+          const actualCallData =
+            mockPrismaClient.candidate.create.mock.calls[0][0].data;
+          excludedFields.forEach((field) => {
+            expect(actualCallData).not.toHaveProperty(field);
+          });
+        },
+      );
     });
   });
 });

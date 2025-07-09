@@ -52,33 +52,6 @@ describe("CandidateService Unit Tests", () => {
       });
     });
 
-    it("should handle upload errors", async () => {
-      // Arrange
-      const mockFile = new File(["test content"], "resume.pdf", {
-        type: "application/pdf",
-      });
-      const mockError = {
-        response: {
-          data: "File too large",
-        },
-      };
-      mockedAxios.post.mockRejectedValueOnce(mockError);
-
-      // Act & Assert
-      await expect(uploadCV(mockFile)).rejects.toThrow(
-        "Error al subir el archivo:"
-      );
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        "http://localhost:3010/upload",
-        expect.any(FormData),
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-    });
-
     it("should create FormData correctly", async () => {
       // Arrange
       const mockFile = new File(["test content"], "resume.pdf", {
@@ -100,42 +73,98 @@ describe("CandidateService Unit Tests", () => {
       expect(formData.get("file")).toBe(mockFile);
     });
 
-    it("should handle network errors", async () => {
-      // Arrange
-      const mockFile = new File(["test content"], "resume.pdf", {
-        type: "application/pdf",
-      });
-      mockedAxios.post.mockRejectedValueOnce(new Error("Network error"));
-
-      // Act & Assert
-      await expect(uploadCV(mockFile)).rejects.toThrow(
-        "Error al subir el archivo:"
-      );
-    });
-
-    it("should handle different file types", async () => {
-      // Arrange
-      const mockFile = new File(["test content"], "resume.docx", {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      });
-      const mockResponse = {
-        data: {
+    // Parametrized test for different file types
+    test.each([
+      {
+        description: "handle different file types (DOCX)",
+        fileName: "resume.docx",
+        fileType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        expectedResult: {
           filePath: "/uploads/resume.docx",
           fileType:
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         },
-      };
-      mockedAxios.post.mockResolvedValueOnce(mockResponse);
+      },
+      {
+        description: "handle different file types (PDF)",
+        fileName: "resume.pdf",
+        fileType: "application/pdf",
+        expectedResult: {
+          filePath: "/uploads/resume.pdf",
+          fileType: "application/pdf",
+        },
+      },
+      {
+        description: "handle different file types (TXT)",
+        fileName: "resume.txt",
+        fileType: "text/plain",
+        expectedResult: {
+          filePath: "/uploads/resume.txt",
+          fileType: "text/plain",
+        },
+      },
+    ])(
+      "should $description",
+      async ({ fileName, fileType, expectedResult }) => {
+        // Arrange
+        const mockFile = new File(["test content"], fileName, {
+          type: fileType,
+        });
+        const mockResponse = { data: expectedResult };
+        mockedAxios.post.mockResolvedValueOnce(mockResponse);
 
-      // Act
-      const result = await uploadCV(mockFile);
+        // Act
+        const result = await uploadCV(mockFile);
 
-      // Assert
-      expect(result).toEqual({
-        filePath: "/uploads/resume.docx",
-        fileType:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        // Assert
+        expect(result).toEqual(expectedResult);
+      }
+    );
+
+    // Parametrized test for error scenarios
+    test.each([
+      {
+        description: "handle upload errors",
+        error: {
+          response: {
+            data: "File too large",
+          },
+        },
+        expectedErrorMessage: "Error al subir el archivo:",
+      },
+      {
+        description: "handle network errors",
+        error: new Error("Network error"),
+        expectedErrorMessage: "Error al subir el archivo:",
+      },
+      {
+        description: "handle server timeout errors",
+        error: {
+          response: {
+            data: "Request timeout",
+          },
+        },
+        expectedErrorMessage: "Error al subir el archivo:",
+      },
+    ])("should $description", async ({ error, expectedErrorMessage }) => {
+      // Arrange
+      const mockFile = new File(["test content"], "resume.pdf", {
+        type: "application/pdf",
       });
+      mockedAxios.post.mockRejectedValueOnce(error);
+
+      // Act & Assert
+      await expect(uploadCV(mockFile)).rejects.toThrow(expectedErrorMessage);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        "http://localhost:3010/upload",
+        expect.any(FormData),
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
     });
   });
 
@@ -193,203 +222,158 @@ describe("CandidateService Unit Tests", () => {
       });
     });
 
-    it("should handle validation errors", async () => {
-      // Arrange
-      const mockCandidateData = {
-        firstName: "Juan",
-        lastName: "Pérez",
-        email: "invalid-email",
-        phone: "612345678",
-        address: "Calle Ejemplo 123",
-      };
-
-      const mockError = {
-        response: {
-          data: "Invalid email format",
+    // Parametrized test for different candidate data scenarios
+    test.each([
+      {
+        description: "send candidate data without optional fields",
+        candidateData: {
+          firstName: "Juan",
+          lastName: "Pérez",
+          email: "juan.perez@example.com",
         },
-      };
-      mockedAxios.post.mockRejectedValueOnce(mockError);
-
-      // Act & Assert
-      await expect(sendCandidateData(mockCandidateData)).rejects.toThrow(
-        "Error al enviar datos del candidato:"
-      );
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        "http://localhost:3010/candidates",
-        mockCandidateData
-      );
-    });
-
-    it("should handle server errors", async () => {
-      // Arrange
-      const mockCandidateData = {
-        firstName: "Juan",
-        lastName: "Pérez",
-        email: "juan.perez@example.com",
-        phone: "612345678",
-        address: "Calle Ejemplo 123",
-      };
-
-      const mockError = {
-        response: {
-          data: "Internal server error",
+      },
+      {
+        description: "send candidate data with empty arrays",
+        candidateData: {
+          firstName: "Juan",
+          lastName: "Pérez",
+          email: "juan.perez@example.com",
+          phone: "612345678",
+          address: "Calle Ejemplo 123",
+          educations: [],
+          workExperiences: [],
+          cv: null,
         },
-      };
-      mockedAxios.post.mockRejectedValueOnce(mockError);
-
-      // Act & Assert
-      await expect(sendCandidateData(mockCandidateData)).rejects.toThrow(
-        "Error al enviar datos del candidato:"
-      );
-    });
-
-    it("should handle network errors", async () => {
+      },
+      {
+        description: "handle multiple educations and work experiences",
+        candidateData: {
+          firstName: "Juan",
+          lastName: "Pérez",
+          email: "juan.perez@example.com",
+          phone: "612345678",
+          address: "Calle Ejemplo 123",
+          educations: [
+            {
+              institution: "Universidad de Madrid",
+              title: "Ingeniería Informática",
+              startDate: "2020-09-01",
+              endDate: "2024-06-30",
+            },
+            {
+              institution: "Universidad Politécnica",
+              title: "Máster en Desarrollo Web",
+              startDate: "2024-09-01",
+              endDate: "2025-06-30",
+            },
+          ],
+          workExperiences: [
+            {
+              company: "Tech Corp",
+              position: "Junior Developer",
+              description: "Desarrollo de aplicaciones web",
+              startDate: "2023-01-15",
+              endDate: "2023-12-31",
+            },
+            {
+              company: "Innovation Lab",
+              position: "Senior Developer",
+              description: "Liderazgo de proyectos técnicos",
+              startDate: "2024-01-01",
+              endDate: "2024-12-31",
+            },
+          ],
+          cv: {
+            filePath: "/uploads/1234567890-resume.pdf",
+            fileType: "application/pdf",
+          },
+        },
+      },
+    ])("should $description", async ({ candidateData }) => {
       // Arrange
-      const mockCandidateData = {
-        firstName: "Juan",
-        lastName: "Pérez",
-        email: "juan.perez@example.com",
-        phone: "612345678",
-        address: "Calle Ejemplo 123",
-      };
-
-      mockedAxios.post.mockRejectedValueOnce(new Error("Network error"));
-
-      // Act & Assert
-      await expect(sendCandidateData(mockCandidateData)).rejects.toThrow(
-        "Error al enviar datos del candidato:"
-      );
-    });
-
-    it("should send candidate data without optional fields", async () => {
-      // Arrange
-      const mockCandidateData = {
-        firstName: "Juan",
-        lastName: "Pérez",
-        email: "juan.perez@example.com",
-      };
-
       const mockResponse = {
         data: {
           message: "Candidate created successfully",
-          candidate: { id: 1, ...mockCandidateData },
+          candidate: { id: 1, ...candidateData },
         },
       };
       mockedAxios.post.mockResolvedValueOnce(mockResponse);
 
       // Act
-      const result = await sendCandidateData(mockCandidateData);
+      const result = await sendCandidateData(candidateData);
 
       // Assert
       expect(mockedAxios.post).toHaveBeenCalledWith(
         "http://localhost:3010/candidates",
-        mockCandidateData
+        candidateData
       );
       expect(result).toEqual({
         message: "Candidate created successfully",
-        candidate: { id: 1, ...mockCandidateData },
+        candidate: { id: 1, ...candidateData },
       });
     });
 
-    it("should send candidate data with empty arrays", async () => {
-      // Arrange
-      const mockCandidateData = {
-        firstName: "Juan",
-        lastName: "Pérez",
-        email: "juan.perez@example.com",
-        phone: "612345678",
-        address: "Calle Ejemplo 123",
-        educations: [],
-        workExperiences: [],
-        cv: null,
-      };
-
-      const mockResponse = {
-        data: {
-          message: "Candidate created successfully",
-          candidate: { id: 1, ...mockCandidateData },
+    // Parametrized test for error scenarios
+    test.each([
+      {
+        description: "handle validation errors",
+        candidateData: {
+          firstName: "Juan",
+          lastName: "Pérez",
+          email: "invalid-email",
+          phone: "612345678",
+          address: "Calle Ejemplo 123",
         },
-      };
-      mockedAxios.post.mockResolvedValueOnce(mockResponse);
-
-      // Act
-      const result = await sendCandidateData(mockCandidateData);
-
-      // Assert
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        "http://localhost:3010/candidates",
-        mockCandidateData
-      );
-      expect(result).toEqual({
-        message: "Candidate created successfully",
-        candidate: { id: 1, ...mockCandidateData },
-      });
-    });
-
-    it("should handle multiple educations and work experiences", async () => {
-      // Arrange
-      const mockCandidateData = {
-        firstName: "Juan",
-        lastName: "Pérez",
-        email: "juan.perez@example.com",
-        phone: "612345678",
-        address: "Calle Ejemplo 123",
-        educations: [
-          {
-            institution: "Universidad de Madrid",
-            title: "Ingeniería Informática",
-            startDate: "2020-09-01",
-            endDate: "2024-06-30",
+        error: {
+          response: {
+            data: "Invalid email format",
           },
-          {
-            institution: "Universidad Politécnica",
-            title: "Máster en Desarrollo Web",
-            startDate: "2024-09-01",
-            endDate: "2025-06-30",
-          },
-        ],
-        workExperiences: [
-          {
-            company: "Tech Corp",
-            position: "Junior Developer",
-            description: "Desarrollo de aplicaciones web",
-            startDate: "2023-01-15",
-            endDate: "2023-12-31",
-          },
-          {
-            company: "Innovation Lab",
-            position: "Senior Developer",
-            description: "Liderazgo de proyectos técnicos",
-            startDate: "2024-01-01",
-            endDate: "2024-12-31",
-          },
-        ],
-        cv: {
-          filePath: "/uploads/1234567890-resume.pdf",
-          fileType: "application/pdf",
         },
-      };
-
-      const mockResponse = {
-        data: {
-          message: "Candidate created successfully",
-          candidate: { id: 1, ...mockCandidateData },
+        expectedErrorMessage: "Error al enviar datos del candidato:",
+      },
+      {
+        description: "handle server errors",
+        candidateData: {
+          firstName: "Juan",
+          lastName: "Pérez",
+          email: "juan.perez@example.com",
+          phone: "612345678",
+          address: "Calle Ejemplo 123",
         },
-      };
-      mockedAxios.post.mockResolvedValueOnce(mockResponse);
+        error: {
+          response: {
+            data: "Internal server error",
+          },
+        },
+        expectedErrorMessage: "Error al enviar datos del candidato:",
+      },
+      {
+        description: "handle network errors",
+        candidateData: {
+          firstName: "Juan",
+          lastName: "Pérez",
+          email: "juan.perez@example.com",
+          phone: "612345678",
+          address: "Calle Ejemplo 123",
+        },
+        error: new Error("Network error"),
+        expectedErrorMessage: "Error al enviar datos del candidato:",
+      },
+    ])(
+      "should $description",
+      async ({ candidateData, error, expectedErrorMessage }) => {
+        // Arrange
+        mockedAxios.post.mockRejectedValueOnce(error);
 
-      // Act
-      const result = await sendCandidateData(mockCandidateData);
-
-      // Assert
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        "http://localhost:3010/candidates",
-        mockCandidateData
-      );
-      expect(result).toEqual({
-        message: "Candidate created successfully",
-        candidate: { id: 1, ...mockCandidateData },
-      });
-    });
+        // Act & Assert
+        await expect(sendCandidateData(candidateData)).rejects.toThrow(
+          expectedErrorMessage
+        );
+        expect(mockedAxios.post).toHaveBeenCalledWith(
+          "http://localhost:3010/candidates",
+          candidateData
+        );
+      }
+    );
   });
 });
